@@ -12,7 +12,7 @@ void exit_game();
 
 //--------------------------------------------------------------------------
 #define MAX_BULLET_COUNT 200
-#define MAX_ENEMY_COUNT 10
+#define MAX_ENEMY_COUNT 2
 
 
 #define MOVE_COOLDOWN 4
@@ -225,18 +225,18 @@ void check_enemies(){
     check_dead();
 }
 
-void enemy_init(int type){
+void enemy_init(int type, int index){
     int x = (rand() % window_width - 2) + 2;
     int y = (rand() % window_height - 4) + 4;
-    game.enemies[game.enemy_count].coords.x = x;
-    game.enemies[game.enemy_count].coords.y = y;
+    game.enemies[index].coords.x = x;
+    game.enemies[index].coords.y = y;
 
     switch (type){
     case ENEMY_TYPE_1:
-        game.enemies[game.enemy_count].type = type;
-        game.enemies[game.enemy_count].damage = ENEMY_TYPE_1_DAMAGE;
-        game.enemies[game.enemy_count].health = ENEMY_TYPE_1_HEALTH;
-        game.enemies[game.enemy_count].alive = 1;
+        game.enemies[index].type = type;
+        game.enemies[index].damage = ENEMY_TYPE_1_DAMAGE;
+        game.enemies[index].health = ENEMY_TYPE_1_HEALTH;
+        game.enemies[index].alive = 1;
         break;
     
     default:
@@ -244,12 +244,26 @@ void enemy_init(int type){
     }
 }
 
+int enemy_dead(){
+    for(int i = 0; i < game.enemy_count; ++i)
+        if(game.enemies[i].alive == 0)
+            return i;
+
+    return -1;
+}
+
 void spawn_enemy(){
-    if(enemy_cooldown >= ENEMY_SPAWN_COOLDOWN){
+    if(enemy_cooldown >= ENEMY_SPAWN_COOLDOWN && game.enemy_count <= MAX_ENEMY_COUNT){
         srand(time(NULL));
         int type = rand() % NR_OF_TYPES + 1;
-        enemy_init(type);
-        game.enemy_count++;
+        
+        int index = enemy_dead();
+        if(index == -1 && game.enemy_count < MAX_ENEMY_COUNT){
+            enemy_init(type, game.enemy_count);
+            game.enemy_count++;
+        }else{
+            enemy_init(type, index);
+        }
 
         enemy_cooldown = 0;
     }
