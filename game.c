@@ -1,19 +1,25 @@
-#include <stdlib.h>
-#include <unistd.h>
 #include <stdio.h>
-#include <time.h>
+#include <stdlib.h>
 #include <stdbool.h>
-#include <termios.h>
+#include <time.h>
+#include <string.h>
 #include <sys/ioctl.h>
-
+#include <unistd.h>
+#include <termios.h>
 
 void start_screen();
 void exit_game();
 
 //--------------------------------------------------------------------------
 
-#define TIMEOUT 20000
-#define MOVE_DELAY 10
+#define MOVE_COOLDOWN 4
+
+#define SHOOT_COOLDOWN_WEAPON_1 10
+
+#define UP 1
+#define RIGHT 2
+#define DOWN 3
+#define LEFT 4
 
 //--------------------------------------------------------------------------
 int window_height;
@@ -68,14 +74,22 @@ typedef struct{
 } Coords;
 
 typedef struct{
+    Coords coords;
+    int direction;
+} Bullet;
+
+typedef struct{
     int stage;
+    int cooldown;
+    Bullet bullets[200];
 } Weapon;
 
 typedef struct{
     Coords coords;
     bool is_alive;
     int health;
-    Weapon weapon;        
+    Weapon weapon;   
+    int shooting_dir;     
 } Shooter;
 
 typedef struct{
@@ -83,6 +97,7 @@ typedef struct{
     Shooter shooter;
     int kills;
     int best_game;
+    int bullet_count;
 } Game;
 
 Game game;
@@ -90,6 +105,12 @@ Game game;
 void game_init(){
     game.kills = 0;
     game.is_running = 1;
+    game.bullet_count = 0;
+}
+
+void weapon_init(){
+    game.shooter.weapon.stage = 1;
+    game.shooter.weapon.cooldown = SHOOT_COOLDOWN_WEAPON_1;
 }
 
 void shooter_init(){
@@ -97,7 +118,8 @@ void shooter_init(){
     game.shooter.coords.x = window_width / 2;
     game.shooter.coords.y = window_height / 2;
     game.shooter.health = 100;
-    game.shooter.weapon.stage = 1;
+    game.shooter.shooting_dir = RIGHT;
+    weapon_init();
 }
 
 void elements_init(){
@@ -109,8 +131,95 @@ void print_shooter(){
     print_at(game.shooter.coords.x, game.shooter.coords.y, "x");
 }
 
+void print_bullets(){
+    for(int i = 0; i < game.bullet_count; ++i)
+        print_at(game.shooter.weapon.bullets[i].coords.x, game.shooter.weapon.bullets[i].coords.y, ".");
+}
+
 void print_elements(){
     print_shooter();
+    print_bullets();
+}
+
+//--------------------------------------------------------------------
+
+
+int movement;
+void set_movement(){
+    movement = (movement + 1) % 1000000;
+}
+
+int shoot_cooldown;
+void set_shoot_cooldown(){
+    shoot_cooldown = (shoot_cooldown + 1) % 1000000;
+}
+
+//--------------------------------------------------------------------
+
+void bullet_init(int index){
+    game.shooter.weapon.bullets[index].direction = game.shooter.shooting_dir;
+    switch (game.shooter.shooting_dir){
+    case UP:
+        game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x;
+        game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y - 1;
+        break;
+    case RIGHT:
+        game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x + 1;
+        game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y;
+        break;
+    case DOWN:
+        game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x;
+        game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y + 1;
+        break;
+    case LEFT:
+        game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x - 1;
+        game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y;
+        break;
+    
+    default:
+        break;
+    }
+}
+
+void shoot_weapon_1(){
+    bullet_init(game.bullet_count);
+    shoot_cooldown = 0;
+    game.bullet_count++;
+}
+
+void shoot(){
+    if(shoot_cooldown >= game.shooter.weapon.cooldown){
+        switch (game.shooter.weapon.stage){
+        case 1:
+            shoot_weapon_1();
+            break;
+        
+        default:
+            break;
+        }
+    }
+}
+
+void move_bullets(){
+    for(int i = 0; i < game.bullet_count; ++i){
+        switch (game.shooter.weapon.bullets[i].direction){
+        case UP:
+            game.shooter.weapon.bullets[i].coords.y--;
+            break;
+        case RIGHT:
+            game.shooter.weapon.bullets[i].coords.x++;
+            break;
+        case DOWN:
+            game.shooter.weapon.bullets[i].coords.y++;
+            break;
+        case LEFT:
+            game.shooter.weapon.bullets[i].coords.x--;
+            break;
+        
+        default:
+            break;
+        }
+    }
 }
 
 //--------------------------------------------------------------------
@@ -121,35 +230,58 @@ void leave_game(){
     start_screen();
 }
 
-void listen_for_input(char* key, int* move_counter){
-    if(*move_counter >= MOVE_DELAY){
-        if(*key == '\0')
-            *key = getchar();
+void handle_key(char* key){
+    if(*key == 27){
+        leave_game();
+        return;
+    }
 
-        if(*key != '\0'){
-            switch (*key){
-            case 'w':
-                game.shooter.coords.y--;
-                break;
-            case 'a':
-                game.shooter.coords.x--;
-                break;
-            case 's':
-                game.shooter.coords.y++;
-                break;
-            case 'd':
-                game.shooter.coords.x++;
-                break;
-            case 27:
-                leave_game();
-                break;
-            default:
-                break;
-            }
+    if(*key == 'k'){
+        shoot();
+        return;
+    }
 
-            *key = '\0';
-            *move_counter = 0;
-        }
+    if(movement >= MOVE_COOLDOWN){
+        movement = 0;
+        switch (*key){
+                case 'w':
+                    game.shooter.coords.y--;
+                    game.shooter.shooting_dir = UP;
+                    break;
+                case 'a':
+                    game.shooter.coords.x--;
+                    game.shooter.shooting_dir = LEFT;
+                    break;
+                case 's':
+                    game.shooter.coords.y++;
+                    game.shooter.shooting_dir = DOWN;
+                    break;
+                case 'd':
+                    game.shooter.coords.x++;
+                    game.shooter.shooting_dir = RIGHT;
+                    break;
+                default:
+                    break;
+                }
+    }
+}
+
+
+void listen_for_input(char* key){
+    fd_set fd;
+    FD_ZERO(&fd);
+    FD_SET(STDIN_FILENO, &fd);
+
+    struct timeval timeint;
+    timeint.tv_sec = 0;
+    timeint.tv_usec = 30000;
+
+    int res = select(STDIN_FILENO + 1, &fd, NULL, NULL, &timeint);
+
+    if(res > 0){
+        read(STDIN_FILENO, key, 1);
+        if(game.is_running)
+            handle_key(key);
     }
 }
 
@@ -157,16 +289,19 @@ void listen_for_input(char* key, int* move_counter){
 
 void game_loop(){
     char key = '\0';
-    int move_counter = 0;
+    movement = 0;
     while(game.is_running){
+        fflush(stdout);
         clear_terminal();
         print_elements();
 
-        listen_for_input(&key, &move_counter);
-        move_counter = (move_counter + 1) % 1000;
+        set_movement();
+        set_shoot_cooldown();
 
-        usleep(TIMEOUT);
-    }
+        move_bullets();
+
+        listen_for_input(&key);
+    } 
 }
 
 //--------------------------------------------------------------------
@@ -187,18 +322,14 @@ void start_screen(){
     print_at(window_width/8, window_height/3-3, "Press 's' to start the game");
     print_at(window_width/8, window_height/3-1, "Press 'q' to quit  the game");
 
-
-    while(1){
-        char key = getchar();
-
-        if(key == 'q'){
-            exit_game();
-        }else if(key == 's'){
-            start_game();
-        }
-
-        usleep(TIMEOUT);
+    char key = getchar();
+        
+    if(key == 'q'){
+        exit_game();
+    }else if(key == 's'){
+        start_game();
     }
+    
 }
 
 //-----------------------------------------------------------------------
