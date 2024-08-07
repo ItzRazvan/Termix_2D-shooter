@@ -11,6 +11,7 @@ void start_screen();
 void exit_game();
 
 //--------------------------------------------------------------------------
+#define MAX_BULLETS 200
 
 #define MOVE_COOLDOWN 4
 
@@ -76,12 +77,13 @@ typedef struct{
 typedef struct{
     Coords coords;
     int direction;
+    bool out_of_bounds;
 } Bullet;
 
 typedef struct{
     int stage;
     int cooldown;
-    Bullet bullets[200];
+    Bullet bullets[MAX_BULLETS];
 } Weapon;
 
 typedef struct{
@@ -133,12 +135,13 @@ void print_shooter(){
 
 void print_bullets(){
     for(int i = 0; i < game.bullet_count; ++i)
-        print_at(game.shooter.weapon.bullets[i].coords.x, game.shooter.weapon.bullets[i].coords.y, ".");
+        if(!game.shooter.weapon.bullets[i].out_of_bounds)
+            print_at(game.shooter.weapon.bullets[i].coords.x, game.shooter.weapon.bullets[i].coords.y, ".");
 }
 
 void print_elements(){
-    print_shooter();
     print_bullets();
+    print_shooter();
 }
 
 //--------------------------------------------------------------------
@@ -157,6 +160,7 @@ void set_shoot_cooldown(){
 //--------------------------------------------------------------------
 
 void bullet_init(int index){
+    game.shooter.weapon.bullets[index].out_of_bounds = 0;
     game.shooter.weapon.bullets[index].direction = game.shooter.shooting_dir;
     switch (game.shooter.shooting_dir){
     case UP:
@@ -181,11 +185,33 @@ void bullet_init(int index){
     }
 }
 
-void shoot_weapon_1(){
-    bullet_init(game.bullet_count);
-    shoot_cooldown = 0;
-    game.bullet_count++;
+int check_for_out_of_bounds_bullets(){
+    for(int i = 0; i < game.bullet_count; ++i)
+        if(game.shooter.weapon.bullets[i].out_of_bounds)
+            return i;
+        
+    return -1;
+
 }
+
+
+bool check_count_vs_arraysize(){
+    return game.bullet_count < MAX_BULLETS;
+}
+
+void shoot_weapon_1(){
+    int index = check_for_out_of_bounds_bullets();
+    if(index == -1){
+        if(check_count_vs_arraysize()){
+            bullet_init(game.bullet_count);
+            game.bullet_count++;
+        }
+    }else{
+        bullet_init(index);
+    }
+    shoot_cooldown = 0;
+}
+
 
 void shoot(){
     if(shoot_cooldown >= game.shooter.weapon.cooldown){
@@ -193,31 +219,40 @@ void shoot(){
         case 1:
             shoot_weapon_1();
             break;
-        
+            
         default:
             break;
         }
     }
+    
+}
+
+void mark_out_of_bounds_bullets(){
+    for(int i = 0; i < game.bullet_count; ++i)
+        if(game.shooter.weapon.bullets[i].coords.x < 1 || game.shooter.weapon.bullets[i].coords.x > window_width || game.shooter.weapon.bullets[i].coords.y < 1 || game.shooter.weapon.bullets[i].coords.y > window_height)
+            game.shooter.weapon.bullets[i].out_of_bounds = 1;
 }
 
 void move_bullets(){
     for(int i = 0; i < game.bullet_count; ++i){
-        switch (game.shooter.weapon.bullets[i].direction){
-        case UP:
-            game.shooter.weapon.bullets[i].coords.y--;
-            break;
-        case RIGHT:
-            game.shooter.weapon.bullets[i].coords.x++;
-            break;
-        case DOWN:
-            game.shooter.weapon.bullets[i].coords.y++;
-            break;
-        case LEFT:
-            game.shooter.weapon.bullets[i].coords.x--;
-            break;
-        
-        default:
-            break;
+        if(!game.shooter.weapon.bullets[i].out_of_bounds){
+            switch (game.shooter.weapon.bullets[i].direction){
+            case UP:
+                game.shooter.weapon.bullets[i].coords.y--;
+                break;
+            case RIGHT:
+                game.shooter.weapon.bullets[i].coords.x++;
+                break;
+            case DOWN:
+                game.shooter.weapon.bullets[i].coords.y++;
+                break;
+            case LEFT:
+                game.shooter.weapon.bullets[i].coords.x--;
+                break;
+            
+            default:
+                break;
+            }
         }
     }
 }
@@ -299,6 +334,7 @@ void game_loop(){
         set_shoot_cooldown();
 
         move_bullets();
+        mark_out_of_bounds_bullets();
 
         listen_for_input(&key);
     } 
