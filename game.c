@@ -12,7 +12,7 @@ void exit_game();
 
 //--------------------------------------------------------------------------
 #define MAX_BULLET_COUNT 200
-#define MAX_ENEMY_COUNT 2
+#define MAX_ENEMY_COUNT 10
 
 
 #define MOVE_COOLDOWN 4
@@ -25,7 +25,7 @@ void exit_game();
 
 #define ENEMY_TYPE_1 1
 #define ENEMY_TYPE_1_HEALTH 15
-#define ENEMY_TYPE_1_DAMAGE 5
+#define ENEMY_TYPE_1_DAMAGE 1
 
 #define UP 1
 #define RIGHT 2
@@ -100,7 +100,6 @@ typedef struct{
 
 typedef struct{
     Coords coords;
-    bool is_alive;
     int health;
     Weapon weapon;   
     int shooting_dir;     
@@ -140,7 +139,6 @@ void weapon_init(){
 }
 
 void shooter_init(){
-    game.shooter.is_alive = 1;
     game.shooter.coords.x = window_width / 2;
     game.shooter.coords.y = window_height / 2;
     game.shooter.health = 100;
@@ -203,13 +201,21 @@ void set_cooldowns(){
 
 //--------------------------------------------------------------------
 
-void check_collisions(){
+void check_bullet_collisions(){
     for(int i = 0; i < game.enemy_count; ++i){
         for(int j = 0; j < game.bullet_count; ++j){
             if(game.enemies[i].alive && !game.shooter.weapon.bullets[j].hit && game.enemies[i].coords.x == game.shooter.weapon.bullets[j].coords.x && game.enemies[i].coords.y == game.shooter.weapon.bullets[j].coords.y){
                 game.enemies[i].health -= game.shooter.weapon.damage;
                 game.shooter.weapon.bullets[j].hit = 1;
             }
+        }
+    }
+}
+
+void check_shooter_collisions(){
+    for(int i = 0; i < game.enemy_count; ++i){
+        if(game.enemies[i].alive && (game.enemies[i].coords.x == game.shooter.coords.x && game.enemies[i].coords.y == game.shooter.coords.y) || (game.enemies[i].coords.x == game.shooter.coords.x + 1 && game.enemies[i].coords.y == game.shooter.coords.y) || (game.enemies[i].coords.x == game.shooter.coords.x - 1 && game.enemies[i].coords.y == game.shooter.coords.y) || (game.enemies[i].coords.x == game.shooter.coords.x && game.enemies[i].coords.y == game.shooter.coords.y + 1) || (game.enemies[i].coords.x == game.shooter.coords.x && game.enemies[i].coords.y == game.shooter.coords.y - 1)){
+            game.shooter.health -= game.enemies[i].damage;
         }
     }
 }
@@ -221,7 +227,8 @@ void check_dead(){
 }
 
 void check_enemies(){
-    check_collisions();
+    check_bullet_collisions();
+    check_shooter_collisions();
     check_dead();
 }
 
@@ -372,6 +379,13 @@ void move_bullets(){
 
 //--------------------------------------------------------------------
 
+void check_shooter(){
+    if(game.shooter.health <= 0)
+        game.is_running = 0;
+}
+
+//--------------------------------------------------------------------
+
 void leave_game(){
     game.is_running = 0;
     clear_terminal();
@@ -451,8 +465,9 @@ void game_loop(){
         mark_out_of_bounds_bullets();
 
         check_enemies();
-
         spawn_enemy();
+
+        check_shooter();
 
         listen_for_input(&key);
     } 
