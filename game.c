@@ -11,11 +11,21 @@ void start_screen();
 void exit_game();
 
 //--------------------------------------------------------------------------
-#define MAX_BULLETS 200
+#define MAX_BULLET_COUNT 200
+#define MAX_ENEMY_COUNT 10
+
 
 #define MOVE_COOLDOWN 4
+#define ENEMY_SPAWN_COOLDOWN 300
 
 #define SHOOT_COOLDOWN_WEAPON_1 10
+#define WEAPON_1_DAMAGE 10
+
+#define NR_OF_TYPES 1
+
+#define ENEMY_TYPE_1 1
+#define ENEMY_TYPE_1_HEALTH 15
+#define ENEMY_TYPE_1_DAMAGE 5
 
 #define UP 1
 #define RIGHT 2
@@ -78,12 +88,14 @@ typedef struct{
     Coords coords;
     int direction;
     bool out_of_bounds;
+    bool hit;
 } Bullet;
 
 typedef struct{
     int stage;
     int cooldown;
-    Bullet bullets[MAX_BULLETS];
+    Bullet bullets[MAX_BULLET_COUNT];
+    int damage;
 } Weapon;
 
 typedef struct{
@@ -95,11 +107,21 @@ typedef struct{
 } Shooter;
 
 typedef struct{
+    Coords coords;
+    int health;
+    int damage;
+    int type;
+    bool alive;
+} Enemy;
+
+typedef struct{
     bool is_running;
     Shooter shooter;
     int kills;
     int best_game;
     int bullet_count;
+    Enemy enemies[MAX_ENEMY_COUNT];
+    int enemy_count;
 } Game;
 
 Game game;
@@ -108,11 +130,13 @@ void game_init(){
     game.kills = 0;
     game.is_running = 1;
     game.bullet_count = 0;
+    game.enemy_count = 0;
 }
 
 void weapon_init(){
     game.shooter.weapon.stage = 1;
     game.shooter.weapon.cooldown = SHOOT_COOLDOWN_WEAPON_1;
+    game.shooter.weapon.damage = WEAPON_1_DAMAGE;
 }
 
 void shooter_init(){
@@ -123,6 +147,7 @@ void shooter_init(){
     game.shooter.shooting_dir = RIGHT;
     weapon_init();
 }
+
 
 void elements_init(){
     game_init();
@@ -135,12 +160,20 @@ void print_shooter(){
 
 void print_bullets(){
     for(int i = 0; i < game.bullet_count; ++i)
-        if(!game.shooter.weapon.bullets[i].out_of_bounds)
+        if(!game.shooter.weapon.bullets[i].out_of_bounds && !game.shooter.weapon.bullets[i].hit)
             print_at(game.shooter.weapon.bullets[i].coords.x, game.shooter.weapon.bullets[i].coords.y, ".");
+}
+
+void print_enemies(){
+    for(int i = 0; i < game.enemy_count; ++i)
+        if(game.enemies[i].alive)
+            print_at(game.enemies[i].coords.x, game.enemies[i].coords.y, "0");
+
 }
 
 void print_elements(){
     print_bullets();
+    print_enemies();
     print_shooter();
 }
 
@@ -157,10 +190,76 @@ void set_shoot_cooldown(){
     shoot_cooldown = (shoot_cooldown + 1) % 1000000;
 }
 
+int enemy_cooldown;
+void set_enemy_spawn_cooldown(){
+    enemy_cooldown = (enemy_cooldown + 1) % 1000000;
+}
+
+void set_cooldowns(){
+    set_movement();
+    set_shoot_cooldown();
+    set_enemy_spawn_cooldown();
+}
+
+//--------------------------------------------------------------------
+
+void check_collisions(){
+    for(int i = 0; i < game.enemy_count; ++i){
+        for(int j = 0; j < game.bullet_count; ++j){
+            if(game.enemies[i].alive && !game.shooter.weapon.bullets[j].hit && game.enemies[i].coords.x == game.shooter.weapon.bullets[j].coords.x && game.enemies[i].coords.y == game.shooter.weapon.bullets[j].coords.y){
+                game.enemies[i].health -= game.shooter.weapon.damage;
+                game.shooter.weapon.bullets[j].hit = 1;
+            }
+        }
+    }
+}
+
+void check_dead(){
+    for(int i = 0; i < game.enemy_count; ++i)
+        if(game.enemies[i].health <= 0)
+            game.enemies[i].alive = 0;
+}
+
+void check_enemies(){
+    check_collisions();
+    check_dead();
+}
+
+void enemy_init(int type){
+    int x = (rand() % window_width - 2) + 2;
+    int y = (rand() % window_height - 4) + 4;
+    game.enemies[game.enemy_count].coords.x = x;
+    game.enemies[game.enemy_count].coords.y = y;
+
+    switch (type){
+    case ENEMY_TYPE_1:
+        game.enemies[game.enemy_count].type = type;
+        game.enemies[game.enemy_count].damage = ENEMY_TYPE_1_DAMAGE;
+        game.enemies[game.enemy_count].health = ENEMY_TYPE_1_HEALTH;
+        game.enemies[game.enemy_count].alive = 1;
+        break;
+    
+    default:
+        break;
+    }
+}
+
+void spawn_enemy(){
+    if(enemy_cooldown >= ENEMY_SPAWN_COOLDOWN){
+        srand(time(NULL));
+        int type = rand() % NR_OF_TYPES + 1;
+        enemy_init(type);
+        game.enemy_count++;
+
+        enemy_cooldown = 0;
+    }
+}
+
 //--------------------------------------------------------------------
 
 void bullet_init(int index){
     game.shooter.weapon.bullets[index].out_of_bounds = 0;
+    game.shooter.weapon.bullets[index].hit = 0;
     game.shooter.weapon.bullets[index].direction = game.shooter.shooting_dir;
     switch (game.shooter.shooting_dir){
     case UP:
@@ -185,9 +284,9 @@ void bullet_init(int index){
     }
 }
 
-int check_for_out_of_bounds_bullets(){
+int check_for_available_bullets(){
     for(int i = 0; i < game.bullet_count; ++i)
-        if(game.shooter.weapon.bullets[i].out_of_bounds)
+        if(game.shooter.weapon.bullets[i].out_of_bounds || game.shooter.weapon.bullets[i].hit)
             return i;
         
     return -1;
@@ -196,11 +295,11 @@ int check_for_out_of_bounds_bullets(){
 
 
 bool check_count_vs_arraysize(){
-    return game.bullet_count < MAX_BULLETS;
+    return game.bullet_count < MAX_BULLET_COUNT;
 }
 
 void shoot_weapon_1(){
-    int index = check_for_out_of_bounds_bullets();
+    int index = check_for_available_bullets();
     if(index == -1){
         if(check_count_vs_arraysize()){
             bullet_init(game.bullet_count);
@@ -235,7 +334,7 @@ void mark_out_of_bounds_bullets(){
 
 void move_bullets(){
     for(int i = 0; i < game.bullet_count; ++i){
-        if(!game.shooter.weapon.bullets[i].out_of_bounds){
+        if(!game.shooter.weapon.bullets[i].out_of_bounds && !game.shooter.weapon.bullets[i].hit){
             switch (game.shooter.weapon.bullets[i].direction){
             case UP:
                 game.shooter.weapon.bullets[i].coords.y--;
@@ -324,17 +423,22 @@ void listen_for_input(char* key){
 
 void game_loop(){
     char key = '\0';
-    movement = 0;
+    movement = MOVE_COOLDOWN;
+    shoot_cooldown = SHOOT_COOLDOWN_WEAPON_1;
+    enemy_cooldown = ENEMY_SPAWN_COOLDOWN;
     while(game.is_running){
         fflush(stdout);
         clear_terminal();
         print_elements();
 
-        set_movement();
-        set_shoot_cooldown();
+        set_cooldowns();
 
         move_bullets();
         mark_out_of_bounds_bullets();
+
+        check_enemies();
+
+        spawn_enemy();
 
         listen_for_input(&key);
     } 
