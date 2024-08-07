@@ -9,6 +9,7 @@
 
 void start_screen();
 void exit_game();
+void start_game();
 
 //--------------------------------------------------------------------------
 #define MAX_BULLET_COUNT 200
@@ -65,6 +66,10 @@ void print_at(int x, int y, char* c){
     printf("\033[%d;%dH%s", y, x, c);
 }
 
+
+void print_at_with_int(int x, int y, char* c, int i){
+    printf("\033[%d;%dH%s%d", y, x, c, i);
+}
 
 void clear_terminal(){
     printf("\033[H\033[J");
@@ -169,10 +174,23 @@ void print_enemies(){
 
 }
 
+void print_stats(){
+    print_at_with_int(2, window_height, "Health: ", game.shooter.health);
+    print_at_with_int(15, window_height, "Your score is: ", game.kills);
+}
+
 void print_elements(){
     print_bullets();
     print_enemies();
     print_shooter();
+    print_stats();
+}
+
+void print_death_screen(){
+    print_at(window_width/2 - 4, window_height/2 - 1, "YOU DIED");
+    print_at_with_int(window_width/2-8, window_height/2 + 1, "Your score was: ", game.kills);
+    print_at(window_width/2 - 9, window_height/2 + 3, "Press r to restart");
+    print_at(window_width/2 - 8, window_height/2 + 4, "Press m for menu");
 }
 
 //--------------------------------------------------------------------
@@ -221,9 +239,12 @@ void check_shooter_collisions(){
 }
 
 void check_dead(){
-    for(int i = 0; i < game.enemy_count; ++i)
-        if(game.enemies[i].health <= 0)
+    for(int i = 0; i < game.enemy_count; ++i){
+        if(game.enemies[i].alive && game.enemies[i].health <= 0){
             game.enemies[i].alive = 0;
+            game.kills++;
+        }
+    }
 }
 
 void check_enemies(){
@@ -447,6 +468,18 @@ void listen_for_input(char* key){
     }
 }
 
+void listen_for_endscreen_input(){
+    char key = getchar();
+    if(key == 'r'){
+        start_game();
+    }else if(key == 'm'){
+        start_screen();
+    }else if(key == 'q'){
+        exit_game();
+    }
+    listen_for_endscreen_input();
+}
+
 //--------------------------------------------------------------------
 
 void game_loop(){
@@ -471,6 +504,10 @@ void game_loop(){
 
         listen_for_input(&key);
     } 
+
+    clear_terminal();
+    print_death_screen();
+    listen_for_endscreen_input();
 }
 
 //--------------------------------------------------------------------
@@ -488,6 +525,7 @@ void start_game(){
 }
 
 void start_screen(){
+    clear_terminal();
     print_at(window_width/8, window_height/3-3, "Press 's' to start the game");
     print_at(window_width/8, window_height/3-1, "Press 'q' to quit  the game");
 
