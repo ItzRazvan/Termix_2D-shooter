@@ -12,15 +12,20 @@ void exit_game();
 void start_game();
 
 //--------------------------------------------------------------------------
-#define MAX_BULLET_COUNT 200
-#define MAX_ENEMY_COUNT 10
+#define MAX_BULLET_COUNT 1000
+#define MAX_ENEMY_COUNT 30
 
 
 #define MOVE_COOLDOWN 4
-#define ENEMY_SPAWN_COOLDOWN 300
+#define ENEMY_SPAWN_COOLDOWN 125
 
 #define SHOOT_COOLDOWN_WEAPON_1 10
 #define WEAPON_1_DAMAGE 10
+#define HITBOX_1 1
+
+#define SHOOT_COOLDOWN_WEAPON_2 30
+#define WEAPON_2_DAMAGE 30
+#define HITBOX_2 2
 
 #define NR_OF_TYPES 1
 
@@ -29,10 +34,21 @@ void start_game();
 #define ENEMY_TYPE_1_DAMAGE 1
 #define ENEMY_TYPE_1_MOVE_COOLDOWN 16
 
+#define STAGE_2_THRESHOLD 5
+
+#define ENEMY_TYPE_2 2
+#define ENEMY_TYPE_2_HEALTH 40
+#define ENEMY_TYPE_2_DAMAGE 2
+#define ENEMY_TYPE_2_MOVE_COOLDOWN 12
+
 #define UP 1
 #define RIGHT 2
 #define DOWN 3
 #define LEFT 4
+#define D1 5
+#define D2 6
+#define D3 7
+#define D4 8
 
 //--------------------------------------------------------------------------
 int window_height;
@@ -95,6 +111,7 @@ typedef struct{
     int direction;
     bool out_of_bounds;
     bool hit;
+    int hitbox;
 } Bullet;
 
 typedef struct{
@@ -129,6 +146,7 @@ typedef struct{
     int bullet_count;
     Enemy enemies[MAX_ENEMY_COUNT];
     int enemy_count;
+    int stage;
 } Game;
 
 Game game;
@@ -138,6 +156,7 @@ void game_init(){
     game.is_running = 1;
     game.bullet_count = 0;
     game.enemy_count = 0;
+    game.stage = 1;
 }
 
 void weapon_init(){
@@ -231,9 +250,25 @@ void set_cooldowns(){
 
 void check_bullet_collisions(int i){
     for(int j = 0; j < game.bullet_count; ++j){
-        if(game.enemies[i].alive && !game.shooter.weapon.bullets[j].hit && game.enemies[i].coords.x == game.shooter.weapon.bullets[j].coords.x && game.enemies[i].coords.y == game.shooter.weapon.bullets[j].coords.y){
-            game.enemies[i].health -= game.shooter.weapon.damage;
-            game.shooter.weapon.bullets[j].hit = 1;
+        if(game.enemies[i].alive && !game.shooter.weapon.bullets[j].hit){
+            bool hit = 0;
+
+            switch (game.shooter.weapon.bullets[j].hitbox){
+            case 1:
+                if(game.enemies[i].coords.x == game.shooter.weapon.bullets[j].coords.x && game.enemies[i].coords.y == game.shooter.weapon.bullets[j].coords.y)
+                    hit = 1;
+                break;
+            case 2:
+                if((game.enemies[i].coords.x == game.shooter.weapon.bullets[j].coords.x && game.enemies[i].coords.y == game.shooter.weapon.bullets[j].coords.y) || (game.enemies[i].coords.x == game.shooter.weapon.bullets[j].coords.x + 1 && game.enemies[i].coords.y == game.shooter.weapon.bullets[j].coords.y) || (game.enemies[i].coords.x == game.shooter.weapon.bullets[j].coords.x - 1 && game.enemies[i].coords.y == game.shooter.weapon.bullets[j].coords.y) || (game.enemies[i].coords.x == game.shooter.weapon.bullets[j].coords.x && game.enemies[i].coords.y == game.shooter.weapon.bullets[j].coords.y + 1) || (game.enemies[i].coords.x == game.shooter.weapon.bullets[j].coords.x && game.enemies[i].coords.y == game.shooter.weapon.bullets[j].coords.y - 1) || (game.enemies[i].coords.x == game.shooter.weapon.bullets[j].coords.x + 1 && game.enemies[i].coords.y == game.shooter.weapon.bullets[j].coords.y + 1) || (game.enemies[i].coords.x == game.shooter.weapon.bullets[j].coords.x + 1 && game.enemies[i].coords.y == game.shooter.weapon.bullets[j].coords.y - 1) || (game.enemies[i].coords.x == game.shooter.weapon.bullets[j].coords.x - 1 && game.enemies[i].coords.y == game.shooter.weapon.bullets[j].coords.y + 1) || (game.enemies[i].coords.x == game.shooter.weapon.bullets[j].coords.x - 1 && game.enemies[i].coords.y == game.shooter.weapon.bullets[j].coords.y - 1))
+                    hit = 1;
+            default:
+                break;
+            }
+
+            if(hit){
+                game.enemies[i].health -= game.shooter.weapon.damage;
+                game.shooter.weapon.bullets[j].hit = 1;
+            }
         }
     }
     
@@ -279,6 +314,12 @@ void enemy_init(int type, int index){
         game.enemies[index].move_cooldown = ENEMY_TYPE_1_MOVE_COOLDOWN;
         break;
     
+    case ENEMY_TYPE_2:
+        game.enemies[index].type = type;
+        game.enemies[index].damage = ENEMY_TYPE_2_DAMAGE;
+        game.enemies[index].health = ENEMY_TYPE_2_HEALTH;
+        game.enemies[index].alive = 1;
+        game.enemies[index].move_cooldown = ENEMY_TYPE_2_MOVE_COOLDOWN;
     default:
         break;
     }
@@ -295,7 +336,7 @@ int enemy_dead(){
 void spawn_enemy(){
     if(enemy_cooldown >= ENEMY_SPAWN_COOLDOWN && game.enemy_count <= MAX_ENEMY_COUNT){
         srand(time(NULL));
-        int type = rand() % NR_OF_TYPES + 1;
+        int type = game.stage;
         
         int index = enemy_dead();
         if(index == -1 && game.enemy_count < MAX_ENEMY_COUNT){
@@ -313,7 +354,6 @@ void move_enemies(){
     for(int i = 0; i < game.enemy_count; ++i){
         if(game.enemies[i].alive){
             if(game.enemies[i].count_move_cooldown >= game.enemies[i].move_cooldown){
-                //srand(time(NULL));
                 int which_axes = rand() % 2;
 
                 if(which_axes == 1 && game.shooter.coords.x != game.enemies[i].coords.x){
@@ -338,11 +378,24 @@ void move_enemies(){
 
 //--------------------------------------------------------------------
 
-void bullet_init(int index){
+void bullet_init(int index, int shooting_dir){
     game.shooter.weapon.bullets[index].out_of_bounds = 0;
     game.shooter.weapon.bullets[index].hit = 0;
-    game.shooter.weapon.bullets[index].direction = game.shooter.shooting_dir;
-    switch (game.shooter.shooting_dir){
+    game.shooter.weapon.bullets[index].direction = shooting_dir;
+
+    switch (game.stage){
+    case 1:
+        game.shooter.weapon.bullets[index].hitbox = HITBOX_1;
+        break;
+    case 2:
+        game.shooter.weapon.bullets[index].hitbox = HITBOX_2;
+        break;
+    default:
+        break;
+    }
+        
+
+    switch (shooting_dir){
     case UP:
         game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x;
         game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y - 1;
@@ -359,7 +412,22 @@ void bullet_init(int index){
         game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x - 1;
         game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y;
         break;
-    
+    case D1:
+        game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x + 1;
+        game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y - 1;
+        break;
+    case D2:
+        game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x + 1;
+        game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y + 1;
+        break;
+    case D3:
+        game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x - 1;
+        game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y + 1;
+        break;
+    case D4:
+        game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x - 1;
+        game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y - 1;
+        break;
     default:
         break;
     }
@@ -383,21 +451,86 @@ void shoot_weapon_1(){
     int index = check_for_available_bullets();
     if(index == -1){
         if(check_count_vs_arraysize()){
-            bullet_init(game.bullet_count);
+            bullet_init(game.bullet_count, game.shooter.shooting_dir);
             game.bullet_count++;
         }
     }else{
-        bullet_init(index);
+        bullet_init(index, game.shooter.shooting_dir);
     }
     shoot_cooldown = 0;
 }
 
+void shoot_weapon_2(){
+    int index = check_for_available_bullets();
+    if(index == -1){
+        if(check_count_vs_arraysize()){
+            bullet_init(game.bullet_count, game.shooter.shooting_dir);
+            game.bullet_count++;
+        }
+    }else{
+        bullet_init(index, game.shooter.shooting_dir);
+    }
+
+
+    index = check_for_available_bullets();
+    int second_dir = 0;
+    int third_dir = 0;
+
+    switch(game.shooter.shooting_dir){
+        case UP:
+            second_dir = D1;
+            third_dir = D4;
+            break;
+        case RIGHT:
+            second_dir = D2;
+            third_dir = D1;
+            break;
+        case DOWN:
+            second_dir = D3;
+            third_dir = D2;
+            break;
+        case LEFT:
+            second_dir = D4;
+            third_dir = D3;
+            break;
+    }
+
+
+    if(index == -1){
+        if(check_count_vs_arraysize()){
+            bullet_init(game.bullet_count, second_dir);
+            game.bullet_count++;
+        }
+    }else{
+        bullet_init(index, second_dir);
+    }
+
+
+
+    index = check_for_available_bullets();
+    if(index == -1){
+        if(check_count_vs_arraysize()){
+            bullet_init(game.bullet_count, third_dir);
+            game.bullet_count++;
+        }
+    }else{
+        bullet_init(index, third_dir);
+    }
+
+
+
+    shoot_cooldown = 0;
+}
 
 void shoot(){
     if(shoot_cooldown >= game.shooter.weapon.cooldown){
         switch (game.shooter.weapon.stage){
         case 1:
             shoot_weapon_1();
+            break;
+
+        case 2:
+            shoot_weapon_2();
             break;
             
         default:
@@ -429,7 +562,21 @@ void move_bullets(){
             case LEFT:
                 game.shooter.weapon.bullets[i].coords.x--;
                 break;
-            
+            case D1:
+                game.shooter.weapon.bullets[i].coords.y--;
+                game.shooter.weapon.bullets[i].coords.x++;
+                break;
+            case D2:
+                game.shooter.weapon.bullets[i].coords.y++;
+                game.shooter.weapon.bullets[i].coords.x++;
+                break;
+            case D3:
+                game.shooter.weapon.bullets[i].coords.y++;
+                game.shooter.weapon.bullets[i].coords.x--;
+                break;
+            case D4:
+                game.shooter.weapon.bullets[i].coords.y--;
+                game.shooter.weapon.bullets[i].coords.x--;
             default:
                 break;
             }
@@ -521,6 +668,19 @@ void listen_for_endscreen_input(){
 
 //--------------------------------------------------------------------
 
+
+void check_stage(){
+    if(game.kills == STAGE_2_THRESHOLD){
+        game.shooter.weapon.stage = 2;
+        game.shooter.weapon.cooldown = SHOOT_COOLDOWN_WEAPON_2;
+        game.shooter.weapon.damage = WEAPON_2_DAMAGE;
+        game.stage = 2;
+    }
+}
+
+//--------------------------------------------------------------------
+
+
 void game_loop(){
     char key = '\0';
     movement = MOVE_COOLDOWN;
@@ -541,6 +701,8 @@ void game_loop(){
         spawn_enemy();
 
         check_shooter();
+
+        check_stage();
 
         listen_for_input(&key);
     } 
