@@ -34,7 +34,7 @@ void start_game();
 #define ENEMY_TYPE_1_DAMAGE 1
 #define ENEMY_TYPE_1_MOVE_COOLDOWN 16
 
-#define STAGE_2_THRESHOLD 5
+#define STAGE_2_THRESHOLD 10
 
 #define ENEMY_TYPE_2 2
 #define ENEMY_TYPE_2_HEALTH 40
@@ -668,6 +668,9 @@ void listen_for_endscreen_input(){
 
 //--------------------------------------------------------------------
 
+void stage_up_message(){
+    print_at_with_int(window_width/2-12, window_height/2 + 1, "YOU GOT TO THE NEXT STAGE: ", game.stage);
+}
 
 void check_stage(){
     if(game.kills == STAGE_2_THRESHOLD){
@@ -675,6 +678,8 @@ void check_stage(){
         game.shooter.weapon.cooldown = SHOOT_COOLDOWN_WEAPON_2;
         game.shooter.weapon.damage = WEAPON_2_DAMAGE;
         game.stage = 2;
+
+        stage_up_message();
     }
 }
 
