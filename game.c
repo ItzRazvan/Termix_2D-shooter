@@ -25,7 +25,6 @@ void update_best_score();
 #define RED_COOLDOWN 15
 
 #define MOVE_COOLDOWN 4
-#define ENEMY_SPAWN_COOLDOWN 125
 
 #define SHOOT_COOLDOWN_WEAPON_1 10
 #define WEAPON_1_DAMAGE 10
@@ -35,21 +34,42 @@ void update_best_score();
 #define WEAPON_2_DAMAGE 30
 #define HITBOX_2 2
 
-#define NR_OF_TYPES 1
+#define NR_OF_TYPES 4
 
 #define ENEMY_TYPE_1 1
 #define ENEMY_TYPE_1_HEALTH 15
 #define ENEMY_TYPE_1_DAMAGE 5
 #define ENEMY_TYPE_1_MOVE_COOLDOWN 16
 #define ENEMY_TYPE_1_HIT_COOLDOWN 30
+#define ENEMY_TYPE_1_SPAWN_COOLDOWN 100
 
-#define STAGE_2_THRESHOLD 10
+#define STAGE_2_THRESHOLD 15
 
 #define ENEMY_TYPE_2 2
-#define ENEMY_TYPE_2_HEALTH 40
-#define ENEMY_TYPE_2_DAMAGE 15
-#define ENEMY_TYPE_2_MOVE_COOLDOWN 12
+#define ENEMY_TYPE_2_HEALTH 25
+#define ENEMY_TYPE_2_DAMAGE 8
+#define ENEMY_TYPE_2_MOVE_COOLDOWN 14
 #define ENEMY_TYPE_2_HIT_COOLDOWN 50
+#define ENEMY_TYPE_2_SPAWN_COOLDOWN 90
+
+#define STAGE_3_THRESHOLD 40
+
+#define ENEMY_TYPE_3 3
+#define ENEMY_TYPE_3_HEALTH 50
+#define ENEMY_TYPE_3_DAMAGE 15
+#define ENEMY_TYPE_3_MOVE_COOLDOWN 12
+#define ENEMY_TYPE_3_HIT_COOLDOWN 40
+#define ENEMY_TYPE_3_SPAWN_COOLDOWN 75
+
+
+#define STAGE_4_THRESHOLD 60    
+
+#define ENEMY_TYPE_4 4
+#define ENEMY_TYPE_4_HEALTH 80
+#define ENEMY_TYPE_4_DAMAGE 18
+#define ENEMY_TYPE_4_MOVE_COOLDOWN 12
+#define ENEMY_TYPE_4_HIT_COOLDOWN 30
+#define ENEMY_TYPE_4_SPAWN_COOLDOWN 65
 
 #define UP 1
 #define RIGHT 2
@@ -148,6 +168,8 @@ typedef struct{
     int cooldown;
     Bullet bullets[MAX_BULLET_COUNT];
     int damage;
+    int shoot_cooldown;
+    int shoot_cooldown_count;
 } Weapon;
 
 typedef struct{
@@ -155,7 +177,8 @@ typedef struct{
     int health;
     Weapon weapon;   
     int shooting_dir;  
-    int y_axes_count;   
+    int y_axes_count; 
+    int movement_cooldown;  
 } Shooter;
 
 typedef struct{
@@ -182,6 +205,8 @@ typedef struct{
     int stage;
     bool red;
     int red_count;
+    int enemy_spawn_cooldown;
+    int enemy_spawn_count;
 } Game;
 
 Game game;
@@ -194,12 +219,16 @@ void game_init(){
     game.stage = 1;
     game.red = 0;
     game.red_count = 0;
+    game.enemy_spawn_count = 0;
+    game.enemy_spawn_cooldown = ENEMY_TYPE_1_SPAWN_COOLDOWN;
 }
 
 void weapon_init(){
     game.shooter.weapon.stage = 1;
     game.shooter.weapon.cooldown = SHOOT_COOLDOWN_WEAPON_1;
     game.shooter.weapon.damage = WEAPON_1_DAMAGE;
+    game.shooter.weapon.shoot_cooldown = 0;
+    game.shooter.weapon.shoot_cooldown_count = 0;
 }
 
 void shooter_init(){
@@ -207,6 +236,7 @@ void shooter_init(){
     game.shooter.coords.y = window_height / 2;
     game.shooter.health = 100;
     game.shooter.shooting_dir = RIGHT;
+    game.shooter.movement_cooldown = 0;
     weapon_init();
 }
 
@@ -256,19 +286,16 @@ void print_death_screen(){
 //--------------------------------------------------------------------
 
 
-int movement;
 void set_movement(){
-    movement = (movement + 1) % 1000000;
+    game.shooter.movement_cooldown = (game.shooter.movement_cooldown + 1) % 1000000;
 }
 
-int shoot_cooldown;
 void set_shoot_cooldown(){
-    shoot_cooldown = (shoot_cooldown + 1) % 1000000;
+    game.shooter.weapon.shoot_cooldown_count = (game.shooter.weapon.shoot_cooldown_count + 1) % 1000000;
 }
 
-int enemy_cooldown;
 void set_enemy_spawn_cooldown(){
-    enemy_cooldown = (enemy_cooldown + 1) % 1000000;
+    game.enemy_spawn_count = (game.enemy_spawn_count + 1) % 1000000;
 }
 
 void set_enemies_move_cooldown(){
@@ -397,6 +424,27 @@ void enemy_init(int type, int index){
         game.enemies[index].alive = 1;
         game.enemies[index].move_cooldown = ENEMY_TYPE_2_MOVE_COOLDOWN;
         game.enemies[index].hit_cooldown = ENEMY_TYPE_2_HIT_COOLDOWN;
+        break;
+
+    case ENEMY_TYPE_3:
+        game.enemies[index].type = type;
+        game.enemies[index].damage = ENEMY_TYPE_3_DAMAGE;
+        game.enemies[index].health = ENEMY_TYPE_3_HEALTH;
+        game.enemies[index].alive = 1;
+        game.enemies[index].move_cooldown = ENEMY_TYPE_3_MOVE_COOLDOWN;
+        game.enemies[index].hit_cooldown = ENEMY_TYPE_3_HIT_COOLDOWN;
+        break;
+
+    case ENEMY_TYPE_4:
+        game.enemies[index].type = type;
+        game.enemies[index].damage = ENEMY_TYPE_4_DAMAGE;
+        game.enemies[index].health = ENEMY_TYPE_4_HEALTH;
+        game.enemies[index].alive = 1;
+        game.enemies[index].move_cooldown = ENEMY_TYPE_4_MOVE_COOLDOWN;
+        game.enemies[index].hit_cooldown = ENEMY_TYPE_4_HIT_COOLDOWN;
+        break;
+
+
     default:
         break;
     }
@@ -411,7 +459,7 @@ int enemy_dead(){
 }
 
 void spawn_enemy(){
-    if(enemy_cooldown >= ENEMY_SPAWN_COOLDOWN && game.enemy_count <= MAX_ENEMY_COUNT){
+    if(game.enemy_spawn_count >= game.enemy_spawn_cooldown && game.enemy_count <= MAX_ENEMY_COUNT){
         srand(time(NULL));
         int type = game.stage;
         
@@ -423,7 +471,7 @@ void spawn_enemy(){
             enemy_init(type, index);
         }
 
-        enemy_cooldown = 0;
+        game.enemy_spawn_count = 0;
     }
 }
 
@@ -556,7 +604,6 @@ void shoot_weapon_1(){
     }else{
         bullet_init(index, game.shooter.shooting_dir);
     }
-    shoot_cooldown = 0;
 }
 
 void shoot_weapon_2(){
@@ -615,14 +662,10 @@ void shoot_weapon_2(){
     }else{
         bullet_init(index, third_dir);
     }
-
-
-
-    shoot_cooldown = 0;
 }
 
 void shoot(){
-    if(shoot_cooldown >= game.shooter.weapon.cooldown){
+    if(game.shooter.weapon.shoot_cooldown_count >= game.shooter.weapon.cooldown){
         switch (game.shooter.weapon.stage){
         case 1:
             shoot_weapon_1();
@@ -635,6 +678,8 @@ void shoot(){
         default:
             break;
         }
+
+        game.shooter.weapon.shoot_cooldown_count = 0;
     }
     
 }
@@ -769,8 +814,8 @@ void handle_key(char* key){
         return;
     }
 
-    if(movement >= MOVE_COOLDOWN){
-        movement = 0;
+    if(game.shooter.movement_cooldown >= MOVE_COOLDOWN){
+        game.shooter.movement_cooldown = 0;
         switch (*key){
                 case 'w':
                     if(game.shooter.y_axes_count >= Y_AXES_MOVEMENT_COOLDOWN){
@@ -839,10 +884,21 @@ void stage_up_message(){
 
 void check_stage(){
     if(game.score == STAGE_2_THRESHOLD){
+        game.enemy_spawn_cooldown = ENEMY_TYPE_2_SPAWN_COOLDOWN;
+        game.stage = 2;
+
+        stage_up_message();
+    }else if(game.score == STAGE_3_THRESHOLD){
         game.shooter.weapon.stage = 2;
         game.shooter.weapon.cooldown = SHOOT_COOLDOWN_WEAPON_2;
         game.shooter.weapon.damage = WEAPON_2_DAMAGE;
-        game.stage = 2;
+        game.enemy_spawn_cooldown = ENEMY_TYPE_3_SPAWN_COOLDOWN;
+        game.stage = 3;
+
+        stage_up_message();
+    }else if(game.score == STAGE_4_THRESHOLD){
+        game.enemy_spawn_cooldown = ENEMY_TYPE_4_SPAWN_COOLDOWN;
+        game.stage = 4;
 
         stage_up_message();
     }
@@ -866,9 +922,6 @@ void check_red_screen(){
 
 void game_loop(){
     char key = '\0';
-    movement = MOVE_COOLDOWN;
-    shoot_cooldown = SHOOT_COOLDOWN_WEAPON_1;
-    enemy_cooldown = ENEMY_SPAWN_COOLDOWN;
     while(game.is_running){
         fflush(stdout);
         clear_terminal();
@@ -914,6 +967,7 @@ void exit_game(){
 }
 
 void start_game(){
+    restore_terminal_colour();
     clear_terminal();
     elements_init();
     game_loop();
