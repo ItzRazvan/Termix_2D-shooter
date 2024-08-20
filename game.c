@@ -10,10 +10,17 @@
 void start_screen();
 void exit_game();
 void start_game();
+void update_best_score();
 
 //--------------------------------------------------------------------------
 #define MAX_BULLET_COUNT 1000
 #define MAX_ENEMY_COUNT 30
+
+#define Y_AXES_MOVEMENT_COOLDOWN 6
+#define Y_AXES_BULLETS_COOLDOWN 3
+
+#define Y_AXES 10
+#define X_AXES 11
 
 
 #define MOVE_COOLDOWN 4
@@ -94,8 +101,17 @@ void clear_terminal(){
     printf("\033[H\033[J");
 }
 
+void remove_terminal_indent() {
+    printf("\033[?7l");
+}
+
+void restore_terminal_indent() {
+    printf("\033[?7h");
+}
+
 void terminal_init(){
     enable_raw_mode();
+    remove_terminal_indent();
     get_terminal_size();
     clear_terminal();
     printf("\033[?25l"); //hide cursor
@@ -114,6 +130,8 @@ typedef struct{
     bool out_of_bounds;
     bool hit;
     int hitbox;
+    int y_axes_count;
+    int main_direction;
 } Bullet;
 
 typedef struct{
@@ -127,7 +145,8 @@ typedef struct{
     Coords coords;
     int health;
     Weapon weapon;   
-    int shooting_dir;     
+    int shooting_dir;  
+    int y_axes_count;   
 } Shooter;
 
 typedef struct{
@@ -140,12 +159,13 @@ typedef struct{
     int count_move_cooldown;
     int hit_cooldown;
     int count_hit_cooldown;
+    int y_axes_count;
 } Enemy;
 
 typedef struct{
     bool is_running;
     Shooter shooter;
-    int kills;
+    int score;
     int best_game;
     int bullet_count;
     Enemy enemies[MAX_ENEMY_COUNT];
@@ -156,7 +176,7 @@ typedef struct{
 Game game;
 
 void game_init(){
-    game.kills = 0;
+    game.score = 0;
     game.is_running = 1;
     game.bullet_count = 0;
     game.enemy_count = 0;
@@ -202,7 +222,7 @@ void print_enemies(){
 
 void print_stats(){
     print_at_with_int(2, window_height, "Health: ", game.shooter.health);
-    print_at_with_int(15, window_height, "Your score is: ", game.kills);
+    print_at_with_int(15, window_height, "Your score is: ", game.score);
 }
 
 void print_elements(){
@@ -214,7 +234,7 @@ void print_elements(){
 
 void print_death_screen(){
     print_at(window_width/2 - 4, window_height/2 - 1, "YOU DIED");
-    print_at_with_int(window_width/2-8, window_height/2 + 1, "Your score was: ", game.kills);
+    print_at_with_int(window_width/2-8, window_height/2 + 1, "Your score was: ", game.score);
     print_at(window_width/2 - 9, window_height/2 + 3, "Press r to restart");
     print_at(window_width/2 - 8, window_height/2 + 4, "Press m for menu");
 }
@@ -249,12 +269,36 @@ void set_enemies_hit_cooldown(){
     }
 }
 
+void set_enemy_y_cooldown(){
+    for(int i = 0; i < game.enemy_count; ++i){
+        game.enemies[i].y_axes_count = (game.enemies[i].y_axes_count + 1) % 1000000;
+    }
+}
+
+void set_shooter_y_cooldown(){
+    game.shooter.y_axes_count = (game.shooter.y_axes_count + 1) % 1000000;
+}
+
+void set_bullets_y_cooldown(){
+    for(int i = 0; i < game.bullet_count; ++i){
+        game.shooter.weapon.bullets[i].y_axes_count = (game.shooter.weapon.bullets[i].y_axes_count + 1) % 1000000;
+    }
+}
+
+
+void set_y_axes_cooldown(){
+    set_enemy_y_cooldown();
+    set_shooter_y_cooldown();
+    set_bullets_y_cooldown();
+}
+
 void set_cooldowns(){
     set_movement();
     set_shoot_cooldown();
     set_enemy_spawn_cooldown();
     set_enemies_move_cooldown();
     set_enemies_hit_cooldown();
+    set_y_axes_cooldown();
 }
 
 //--------------------------------------------------------------------
@@ -298,7 +342,7 @@ void check_shooter_collisions(int i){
 void check_dead(int i){
     if(game.enemies[i].alive && game.enemies[i].health <= 0){
         game.enemies[i].alive = 0;
-        game.kills++;
+        game.score++;
     }
 }
 
@@ -375,15 +419,18 @@ void move_enemies(){
 
                 if(which_axes == 1 && game.shooter.coords.x != game.enemies[i].coords.x){
                     if(game.shooter.coords.x > game.enemies[i].coords.x){
-                        game.enemies[i].coords.x++;
+                            game.enemies[i].coords.x++;
                     }else{
                         game.enemies[i].coords.x--;
                     }
                 }else if(game.shooter.coords.y != game.enemies[i].coords.y){
-                    if(game.shooter.coords.y > game.enemies[i].coords.y){
-                        game.enemies[i].coords.y++;
-                    }else{
-                        game.enemies[i].coords.y--;
+                    if(game.enemies[i].y_axes_count >= Y_AXES_MOVEMENT_COOLDOWN){
+                        if(game.shooter.coords.y > game.enemies[i].coords.y){
+                            game.enemies[i].coords.y++;
+                        }else{
+                            game.enemies[i].coords.y--;
+                        }
+                        game.enemies[i].y_axes_count = 0;
                     }
                 }
 
@@ -432,18 +479,37 @@ void bullet_init(int index, int shooting_dir){
     case D1:
         game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x + 1;
         game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y - 1;
+        if(game.shooter.shooting_dir == UP || game.shooter.shooting_dir == DOWN)
+            game.shooter.weapon.bullets[index].main_direction = Y_AXES;
+        else
+            game.shooter.weapon.bullets[index].main_direction = X_AXES;
         break;
     case D2:
         game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x + 1;
         game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y + 1;
+        if(game.shooter.shooting_dir == UP || game.shooter.shooting_dir == DOWN)
+            game.shooter.weapon.bullets[index].main_direction = Y_AXES;
+        else
+            game.shooter.weapon.bullets[index].main_direction = X_AXES;
+        break;
         break;
     case D3:
         game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x - 1;
         game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y + 1;
+        if(game.shooter.shooting_dir == UP || game.shooter.shooting_dir == DOWN)
+            game.shooter.weapon.bullets[index].main_direction = Y_AXES;
+        else
+            game.shooter.weapon.bullets[index].main_direction = X_AXES;
+        break;
         break;
     case D4:
         game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x - 1;
         game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y - 1;
+        if(game.shooter.shooting_dir == UP || game.shooter.shooting_dir == DOWN)
+            game.shooter.weapon.bullets[index].main_direction = Y_AXES;
+        else
+            game.shooter.weapon.bullets[index].main_direction = X_AXES;
+        break;
         break;
     default:
         break;
@@ -568,32 +634,90 @@ void move_bullets(){
         if(!game.shooter.weapon.bullets[i].out_of_bounds && !game.shooter.weapon.bullets[i].hit){
             switch (game.shooter.weapon.bullets[i].direction){
             case UP:
-                game.shooter.weapon.bullets[i].coords.y--;
+                if(game.shooter.weapon.bullets[i].y_axes_count >= Y_AXES_BULLETS_COOLDOWN){
+                    game.shooter.weapon.bullets[i].coords.y--;
+                    game.shooter.weapon.bullets[i].y_axes_count = 0;
+                }
                 break;
             case RIGHT:
                 game.shooter.weapon.bullets[i].coords.x++;
                 break;
             case DOWN:
-                game.shooter.weapon.bullets[i].coords.y++;
+                if(game.shooter.weapon.bullets[i].y_axes_count >= Y_AXES_BULLETS_COOLDOWN){
+                    game.shooter.weapon.bullets[i].coords.y++;
+                    game.shooter.weapon.bullets[i].y_axes_count = 0;
+                }
                 break;
             case LEFT:
                 game.shooter.weapon.bullets[i].coords.x--;
                 break;
             case D1:
-                game.shooter.weapon.bullets[i].coords.y--;
-                game.shooter.weapon.bullets[i].coords.x++;
+                if(game.shooter.weapon.bullets[i].main_direction == Y_AXES){
+                    if(game.shooter.weapon.bullets[i].y_axes_count >= Y_AXES_BULLETS_COOLDOWN){
+                        game.shooter.weapon.bullets[i].coords.y--;
+                        game.shooter.weapon.bullets[i].coords.x++;
+
+                        game.shooter.weapon.bullets[i].y_axes_count = 0;
+                    }
+                }else{
+                    if(game.shooter.weapon.bullets[i].y_axes_count >= Y_AXES_BULLETS_COOLDOWN){
+                        game.shooter.weapon.bullets[i].coords.y--;
+
+                        game.shooter.weapon.bullets[i].y_axes_count = 0;
+                    }
+                    game.shooter.weapon.bullets[i].coords.x++;
+                }
                 break;
             case D2:
-                game.shooter.weapon.bullets[i].coords.y++;
-                game.shooter.weapon.bullets[i].coords.x++;
+                if(game.shooter.weapon.bullets[i].main_direction == Y_AXES){
+                    if(game.shooter.weapon.bullets[i].y_axes_count >= Y_AXES_BULLETS_COOLDOWN){
+                        game.shooter.weapon.bullets[i].coords.y++;
+                        game.shooter.weapon.bullets[i].coords.x++;
+
+                        game.shooter.weapon.bullets[i].y_axes_count = 0;
+                    }
+                }else{
+                    if(game.shooter.weapon.bullets[i].y_axes_count >= Y_AXES_BULLETS_COOLDOWN){
+                        game.shooter.weapon.bullets[i].coords.y++;
+
+                        game.shooter.weapon.bullets[i].y_axes_count = 0;
+                    }
+                    game.shooter.weapon.bullets[i].coords.x++;
+                }
                 break;
             case D3:
-                game.shooter.weapon.bullets[i].coords.y++;
-                game.shooter.weapon.bullets[i].coords.x--;
+                if(game.shooter.weapon.bullets[i].main_direction == Y_AXES){
+                    if(game.shooter.weapon.bullets[i].y_axes_count >= Y_AXES_BULLETS_COOLDOWN){
+                        game.shooter.weapon.bullets[i].coords.y++;
+                        game.shooter.weapon.bullets[i].coords.x--;
+
+                        game.shooter.weapon.bullets[i].y_axes_count = 0;
+                    }
+                }else{
+                    if(game.shooter.weapon.bullets[i].y_axes_count >= Y_AXES_BULLETS_COOLDOWN){
+                        game.shooter.weapon.bullets[i].coords.y++;
+
+                        game.shooter.weapon.bullets[i].y_axes_count = 0;
+                    }
+                    game.shooter.weapon.bullets[i].coords.x--;
+                }
                 break;
             case D4:
-                game.shooter.weapon.bullets[i].coords.y--;
-                game.shooter.weapon.bullets[i].coords.x--;
+                if(game.shooter.weapon.bullets[i].main_direction == Y_AXES){
+                    if(game.shooter.weapon.bullets[i].y_axes_count >= Y_AXES_BULLETS_COOLDOWN){
+                        game.shooter.weapon.bullets[i].coords.y--;
+                        game.shooter.weapon.bullets[i].coords.x--;
+
+                        game.shooter.weapon.bullets[i].y_axes_count = 0;
+                    }
+                }else{
+                    if(game.shooter.weapon.bullets[i].y_axes_count >= Y_AXES_BULLETS_COOLDOWN){
+                        game.shooter.weapon.bullets[i].coords.y--;
+
+                        game.shooter.weapon.bullets[i].y_axes_count = 0;
+                    }
+                    game.shooter.weapon.bullets[i].coords.x--;
+                }
             default:
                 break;
             }
@@ -612,6 +736,7 @@ void check_shooter(){
 
 void leave_game(){
     game.is_running = 0;
+    update_best_score();
     clear_terminal();
     start_screen();
 }
@@ -631,16 +756,22 @@ void handle_key(char* key){
         movement = 0;
         switch (*key){
                 case 'w':
-                    game.shooter.coords.y--;
-                    game.shooter.shooting_dir = UP;
+                    if(game.shooter.y_axes_count >= Y_AXES_MOVEMENT_COOLDOWN){
+                        game.shooter.coords.y--;
+                        game.shooter.shooting_dir = UP;
+                        game.shooter.y_axes_count = 0;
+                    }
                     break;
                 case 'a':
                     game.shooter.coords.x--;
                     game.shooter.shooting_dir = LEFT;
                     break;
                 case 's':
-                    game.shooter.coords.y++;
-                    game.shooter.shooting_dir = DOWN;
+                    if(game.shooter.y_axes_count >= Y_AXES_MOVEMENT_COOLDOWN){
+                        game.shooter.coords.y++;
+                        game.shooter.shooting_dir = DOWN;
+                        game.shooter.y_axes_count = 0;
+                    }
                     break;
                 case 'd':
                     game.shooter.coords.x++;
@@ -690,7 +821,7 @@ void stage_up_message(){
 }
 
 void check_stage(){
-    if(game.kills == STAGE_2_THRESHOLD){
+    if(game.score == STAGE_2_THRESHOLD){
         game.shooter.weapon.stage = 2;
         game.shooter.weapon.cooldown = SHOOT_COOLDOWN_WEAPON_2;
         game.shooter.weapon.damage = WEAPON_2_DAMAGE;
@@ -729,7 +860,8 @@ void game_loop(){
         listen_for_input(&key);
     } 
 
-    clear_terminal();
+    update_best_score();
+    clear_terminal();  
     print_death_screen();
     listen_for_endscreen_input();
 }
@@ -738,6 +870,7 @@ void game_loop(){
 
 void exit_game(){
     clear_terminal();
+    remove_terminal_indent();
     printf("\033[?25h");  //show cursor
     exit(1);
 }
@@ -748,10 +881,37 @@ void start_game(){
     game_loop();
 }
 
+
+int get_best_score(){
+    FILE *f = fopen("score.txt", "r");
+    if(f == NULL)
+        return 0;
+
+    int score = 0;
+    if(fscanf(f, "%d", &score) != 1)
+        score = 0;
+    
+    fclose(f);
+
+    return score;    
+}
+
+void update_best_score(){
+    if(game.score > get_best_score()){
+        FILE *f = fopen("score.txt", "w");
+
+       fprintf(f, "%d", game.score);
+
+        fclose(f);
+    }   
+}
+
+
 void start_screen(){
     clear_terminal();
     print_at(window_width/8, window_height/3-3, "Press 's' to start the game");
     print_at(window_width/8, window_height/3-1, "Press 'q' to quit  the game");
+    print_at_with_int(window_width/8 + 2, window_height/3+2, "Your best score is: ", get_best_score());
 
     char key = getchar();
         
