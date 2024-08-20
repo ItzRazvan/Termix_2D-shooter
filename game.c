@@ -22,6 +22,7 @@ void update_best_score();
 #define Y_AXES 10
 #define X_AXES 11
 
+#define RED_COOLDOWN 15
 
 #define MOVE_COOLDOWN 4
 #define ENEMY_SPAWN_COOLDOWN 125
@@ -95,6 +96,14 @@ void print_at(int x, int y, char* c){
 
 void print_at_with_int(int x, int y, char* c, int i){
     printf("\033[%d;%dH%s%d", y, x, c, i);
+}
+
+void make_terminal_red(){
+    printf("\033[41m");
+}
+
+void restore_terminal_colour(){
+    printf("\033[0m");
 }
 
 void clear_terminal(){
@@ -171,6 +180,8 @@ typedef struct{
     Enemy enemies[MAX_ENEMY_COUNT];
     int enemy_count;
     int stage;
+    bool red;
+    int red_count;
 } Game;
 
 Game game;
@@ -181,6 +192,8 @@ void game_init(){
     game.bullet_count = 0;
     game.enemy_count = 0;
     game.stage = 1;
+    game.red = 0;
+    game.red_count = 0;
 }
 
 void weapon_init(){
@@ -233,6 +246,7 @@ void print_elements(){
 }
 
 void print_death_screen(){
+    make_terminal_red();
     print_at(window_width/2 - 4, window_height/2 - 1, "YOU DIED");
     print_at_with_int(window_width/2-8, window_height/2 + 1, "Your score was: ", game.score);
     print_at(window_width/2 - 9, window_height/2 + 3, "Press r to restart");
@@ -333,6 +347,8 @@ void check_shooter_collisions(int i){
     if(game.enemies[i].alive && (game.enemies[i].coords.x == game.shooter.coords.x && game.enemies[i].coords.y == game.shooter.coords.y) || (game.enemies[i].coords.x == game.shooter.coords.x + 1 && game.enemies[i].coords.y == game.shooter.coords.y) || (game.enemies[i].coords.x == game.shooter.coords.x - 1 && game.enemies[i].coords.y == game.shooter.coords.y) || (game.enemies[i].coords.x == game.shooter.coords.x && game.enemies[i].coords.y == game.shooter.coords.y + 1) || (game.enemies[i].coords.x == game.shooter.coords.x && game.enemies[i].coords.y == game.shooter.coords.y - 1)){
         if(game.enemies[i].count_hit_cooldown >= game.enemies[i].hit_cooldown){
             game.shooter.health -= game.enemies[i].damage;
+            make_terminal_red();
+            game.red = 1;
             game.enemies[i].count_hit_cooldown = 0;
         }
     }
@@ -737,6 +753,7 @@ void check_shooter(){
 void leave_game(){
     game.is_running = 0;
     update_best_score();
+    restore_terminal_colour();
     clear_terminal();
     start_screen();
 }
@@ -833,6 +850,19 @@ void check_stage(){
 
 //--------------------------------------------------------------------
 
+void check_red_screen(){
+    if(game.red == 1){
+        game.red_count++;
+        if(game.red_count >= RED_COOLDOWN){
+            game.red = 0;
+            game.red_count = 0;
+            restore_terminal_colour();
+        }
+
+    }
+}
+
+//--------------------------------------------------------------------
 
 void game_loop(){
     char key = '\0';
@@ -857,8 +887,11 @@ void game_loop(){
 
         check_stage();
 
+        check_red_screen();
+
         listen_for_input(&key);
     } 
+
 
     update_best_score();
     clear_terminal();  
@@ -868,9 +901,14 @@ void game_loop(){
 
 //--------------------------------------------------------------------
 
-void exit_game(){
+void restore_terminal(){
     clear_terminal();
+    restore_terminal_colour();
     remove_terminal_indent();
+}
+
+void exit_game(){
+    restore_terminal();
     printf("\033[?25h");  //show cursor
     exit(1);
 }
@@ -908,6 +946,7 @@ void update_best_score(){
 
 
 void start_screen(){
+    restore_terminal_colour();
     clear_terminal();
     print_at(window_width/8, window_height/3-3, "Press 's' to start the game");
     print_at(window_width/8, window_height/3-1, "Press 'q' to quit  the game");
