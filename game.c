@@ -31,15 +31,17 @@ void start_game();
 
 #define ENEMY_TYPE_1 1
 #define ENEMY_TYPE_1_HEALTH 15
-#define ENEMY_TYPE_1_DAMAGE 1
+#define ENEMY_TYPE_1_DAMAGE 5
 #define ENEMY_TYPE_1_MOVE_COOLDOWN 16
+#define ENEMY_TYPE_1_HIT_COOLDOWN 30
 
 #define STAGE_2_THRESHOLD 10
 
 #define ENEMY_TYPE_2 2
 #define ENEMY_TYPE_2_HEALTH 40
-#define ENEMY_TYPE_2_DAMAGE 2
+#define ENEMY_TYPE_2_DAMAGE 15
 #define ENEMY_TYPE_2_MOVE_COOLDOWN 12
+#define ENEMY_TYPE_2_HIT_COOLDOWN 50
 
 #define UP 1
 #define RIGHT 2
@@ -136,6 +138,8 @@ typedef struct{
     bool alive;
     int move_cooldown;
     int count_move_cooldown;
+    int hit_cooldown;
+    int count_hit_cooldown;
 } Enemy;
 
 typedef struct{
@@ -239,11 +243,18 @@ void set_enemies_move_cooldown(){
     }
 }
 
+void set_enemies_hit_cooldown(){
+    for(int i = 0; i < game.enemy_count; ++i){
+        game.enemies[i].count_hit_cooldown = (game.enemies[i].count_hit_cooldown + 1) % 1000000;
+    }
+}
+
 void set_cooldowns(){
     set_movement();
     set_shoot_cooldown();
     set_enemy_spawn_cooldown();
     set_enemies_move_cooldown();
+    set_enemies_hit_cooldown();
 }
 
 //--------------------------------------------------------------------
@@ -276,7 +287,10 @@ void check_bullet_collisions(int i){
 
 void check_shooter_collisions(int i){
     if(game.enemies[i].alive && (game.enemies[i].coords.x == game.shooter.coords.x && game.enemies[i].coords.y == game.shooter.coords.y) || (game.enemies[i].coords.x == game.shooter.coords.x + 1 && game.enemies[i].coords.y == game.shooter.coords.y) || (game.enemies[i].coords.x == game.shooter.coords.x - 1 && game.enemies[i].coords.y == game.shooter.coords.y) || (game.enemies[i].coords.x == game.shooter.coords.x && game.enemies[i].coords.y == game.shooter.coords.y + 1) || (game.enemies[i].coords.x == game.shooter.coords.x && game.enemies[i].coords.y == game.shooter.coords.y - 1)){
-        game.shooter.health -= game.enemies[i].damage;
+        if(game.enemies[i].count_hit_cooldown >= game.enemies[i].hit_cooldown){
+            game.shooter.health -= game.enemies[i].damage;
+            game.enemies[i].count_hit_cooldown = 0;
+        }
     }
     
 }
@@ -304,6 +318,7 @@ void enemy_init(int type, int index){
     game.enemies[index].coords.x = x;
     game.enemies[index].coords.y = y;
     game.enemies[index].count_move_cooldown = 0;
+    game.enemies[index].count_hit_cooldown = 0;
 
     switch (type){
     case ENEMY_TYPE_1:
@@ -312,6 +327,7 @@ void enemy_init(int type, int index){
         game.enemies[index].health = ENEMY_TYPE_1_HEALTH;
         game.enemies[index].alive = 1;
         game.enemies[index].move_cooldown = ENEMY_TYPE_1_MOVE_COOLDOWN;
+        game.enemies[index].hit_cooldown = ENEMY_TYPE_1_HIT_COOLDOWN;
         break;
     
     case ENEMY_TYPE_2:
@@ -320,6 +336,7 @@ void enemy_init(int type, int index){
         game.enemies[index].health = ENEMY_TYPE_2_HEALTH;
         game.enemies[index].alive = 1;
         game.enemies[index].move_cooldown = ENEMY_TYPE_2_MOVE_COOLDOWN;
+        game.enemies[index].hit_cooldown = ENEMY_TYPE_2_HIT_COOLDOWN;
     default:
         break;
     }
