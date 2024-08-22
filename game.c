@@ -15,6 +15,7 @@ void update_best_score();
 //--------------------------------------------------------------------------
 #define MAX_BULLET_COUNT 1000
 #define MAX_ENEMY_COUNT 30
+#define MAX_POTIONS_COUNT 15
 
 #define Y_AXES_MOVEMENT_COOLDOWN 6
 #define Y_AXES_BULLETS_COOLDOWN 3
@@ -26,7 +27,7 @@ void update_best_score();
 
 #define MOVE_COOLDOWN 4
 
-#define SHOOT_COOLDOWN_WEAPON_1 10
+#define SHOOT_COOLDOWN_WEAPON_1 15
 #define WEAPON_1_DAMAGE 10
 #define HITBOX_1 1
 
@@ -70,6 +71,8 @@ void update_best_score();
 #define ENEMY_TYPE_4_MOVE_COOLDOWN 12
 #define ENEMY_TYPE_4_HIT_COOLDOWN 30
 #define ENEMY_TYPE_4_SPAWN_COOLDOWN 65
+
+#define POTION_HEAL 20
 
 #define UP 1
 #define RIGHT 2
@@ -195,6 +198,12 @@ typedef struct{
 } Enemy;
 
 typedef struct{
+    Coords coords;
+    int heal;
+    bool used;
+} Heal_Potion;
+
+typedef struct{
     bool is_running;
     Shooter shooter;
     int score;
@@ -202,6 +211,8 @@ typedef struct{
     int bullet_count;
     Enemy enemies[MAX_ENEMY_COUNT];
     int enemy_count;
+    Heal_Potion heal_potions[MAX_POTIONS_COUNT];
+    int heal_potions_count;
     int stage;
     bool red;
     int red_count;
@@ -216,6 +227,7 @@ void game_init(){
     game.is_running = 1;
     game.bullet_count = 0;
     game.enemy_count = 0;
+    game.heal_potions_count = 0;
     game.stage = 1;
     game.red = 0;
     game.red_count = 0;
@@ -268,8 +280,16 @@ void print_stats(){
     print_at_with_int(15, window_height, "Your score is: ", game.score);
 }
 
+void print_potions(){
+    for(int i = 0; i < game.heal_potions_count; ++i){
+        if(game.heal_potions[i].used == 0)
+            print_at(game.heal_potions[i].coords.x, game.heal_potions[i].coords.y, "*");
+    }
+}
+
 void print_elements(){
     print_bullets();
+    print_potions();
     print_enemies();
     print_shooter();
     print_stats();
@@ -344,6 +364,50 @@ void set_cooldowns(){
 
 //--------------------------------------------------------------------
 
+void check_potion_collision(){
+    for(int i = 0; i < game.heal_potions_count; ++i){
+        if(game.heal_potions[i].used == 0 && game.shooter.coords.x == game.heal_potions[i].coords.x && game.shooter.coords.y == game.heal_potions[i].coords.y){
+            game.shooter.health += game.heal_potions[i].heal;
+            if(game.shooter.health > 100)
+                game.shooter.health = 100;
+            game.heal_potions[i].used = 1;
+        }
+    }
+}
+
+bool lucky(){
+    int number = rand() % 10 + 1;
+    return (bool)(number == 5);
+}
+
+int search_for_unused_heal_potions(){
+    for(int i = 0; i < game.heal_potions_count; ++i){
+        if(game.heal_potions[i].used == 1)
+            return i;
+    }
+    return -1;
+}
+
+void drop_heal_potion(int x, int y){
+    if(lucky()){
+        int index = search_for_unused_heal_potions();
+        if(index == -1){
+            index = game.heal_potions_count;
+        }
+        if(index != MAX_POTIONS_COUNT){
+            game.heal_potions[index].coords.x = x;
+            game.heal_potions[index].coords.y = y;
+            game.heal_potions[index].used = 0;
+            game.heal_potions[index].heal = POTION_HEAL;
+
+            game.heal_potions_count++;
+        }
+    }
+}
+
+//--------------------------------------------------------------------
+
+
 void check_bullet_collisions(int i){
     for(int j = 0; j < game.bullet_count; ++j){
         if(game.enemies[i].alive && !game.shooter.weapon.bullets[j].hit){
@@ -385,6 +449,7 @@ void check_shooter_collisions(int i){
 void check_dead(int i){
     if(game.enemies[i].alive && game.enemies[i].health <= 0){
         game.enemies[i].alive = 0;
+        drop_heal_potion(game.enemies[i].coords.x, game.enemies[i].coords.y);
         game.score++;
     }
 }
@@ -400,8 +465,38 @@ void check_enemies(){
 }
 
 void enemy_init(int type, int index){
-    int x = (rand() % window_width - 2) + 2;
-    int y = (rand() % window_height - 4) + 4;
+    int x = 0;
+    int y = 0;
+    int section = rand() % 4 + 1;
+    switch (section){
+    case 1: 
+        x = (((rand() % window_width) + 4) % window_width) + 1;
+        y = (rand() % (window_height / 2)) - 8;
+        if(y <= 0)
+            y = 2;
+        break;
+    case 2:
+        x = (rand() % (window_width / 2)) + window_width / 2 + 4;
+        y = ((rand() % window_height + 4) % window_height) + 1;
+        if(x >= window_width)
+            x = window_width - 1;
+        break;
+    case 3:
+        x = (((rand() % window_width) + 4) % window_width) + 1;
+        y = (rand() % window_height / 2) + window_height / 2 + 4;
+        if(y >= window_height)
+            y = window_height - 1;
+        break;
+    case 4:
+        x = (rand() % window_width / 2) - 8;
+        y = ((rand() % window_height + 4) % window_height) + 1;
+        if(x <= 0)
+            x = 2;
+        break;
+
+    default:
+        break;
+    }
     game.enemies[index].coords.x = x;
     game.enemies[index].coords.y = y;
     game.enemies[index].count_move_cooldown = 0;
@@ -526,31 +621,31 @@ void bullet_init(int index, int shooting_dir){
     switch (shooting_dir){
     case UP:
         game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x;
-        game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y - 1;
+        game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y;
         break;
     case RIGHT:
-        game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x + 1;
+        game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x;
         game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y;
         break;
     case DOWN:
         game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x;
-        game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y + 1;
+        game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y;
         break;
     case LEFT:
-        game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x - 1;
+        game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x;
         game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y;
         break;
     case D1:
-        game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x + 1;
-        game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y - 1;
+        game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x;
+        game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y;
         if(game.shooter.shooting_dir == UP || game.shooter.shooting_dir == DOWN)
             game.shooter.weapon.bullets[index].main_direction = Y_AXES;
         else
             game.shooter.weapon.bullets[index].main_direction = X_AXES;
         break;
     case D2:
-        game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x + 1;
-        game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y + 1;
+        game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x;
+        game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y;
         if(game.shooter.shooting_dir == UP || game.shooter.shooting_dir == DOWN)
             game.shooter.weapon.bullets[index].main_direction = Y_AXES;
         else
@@ -558,8 +653,8 @@ void bullet_init(int index, int shooting_dir){
         break;
         break;
     case D3:
-        game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x - 1;
-        game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y + 1;
+        game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x;
+        game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y;
         if(game.shooter.shooting_dir == UP || game.shooter.shooting_dir == DOWN)
             game.shooter.weapon.bullets[index].main_direction = Y_AXES;
         else
@@ -567,8 +662,8 @@ void bullet_init(int index, int shooting_dir){
         break;
         break;
     case D4:
-        game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x - 1;
-        game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y - 1;
+        game.shooter.weapon.bullets[index].coords.x = game.shooter.coords.x;
+        game.shooter.weapon.bullets[index].coords.y = game.shooter.coords.y;
         if(game.shooter.shooting_dir == UP || game.shooter.shooting_dir == DOWN)
             game.shooter.weapon.bullets[index].main_direction = Y_AXES;
         else
@@ -789,8 +884,13 @@ void move_bullets(){
 //--------------------------------------------------------------------
 
 void check_shooter(){
-    if(game.shooter.health <= 0)
+    if(game.shooter.health <= 0){
         game.is_running = 0;
+
+        return;
+    }
+
+    check_potion_collision();
 }
 
 //--------------------------------------------------------------------
@@ -925,22 +1025,23 @@ void game_loop(){
     while(game.is_running){
         fflush(stdout);
         clear_terminal();
+
+
+        check_enemies();        
+        check_shooter();
+        check_stage();
+        check_red_screen();
+
         print_elements();
 
         set_cooldowns();
 
-        move_enemies();
-        move_bullets();
         mark_out_of_bounds_bullets();
 
-        check_enemies();
+        move_enemies();
+        move_bullets();
+
         spawn_enemy();
-
-        check_shooter();
-
-        check_stage();
-
-        check_red_screen();
 
         listen_for_input(&key);
     } 
