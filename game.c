@@ -83,6 +83,12 @@ void update_best_score();
 #define D3 7
 #define D4 8
 
+//OOB = out of bounds
+#define OOB_UP 1 
+#define OOB_RIGHT 2
+#define OOB_DOWN 3
+#define OOB_LEFT 4
+
 //--------------------------------------------------------------------------
 int window_height;
 int window_width;
@@ -258,6 +264,12 @@ void elements_init(){
     shooter_init();
 }
 
+bool in_bounds(int x, int y){
+    if(x > 0 && x <= window_width && y > 0 && y <= window_height)
+        return 1;
+    return 0;
+}
+
 void print_shooter(){
     print_at(game.shooter.coords.x, game.shooter.coords.y, "x");
 }
@@ -270,7 +282,7 @@ void print_bullets(){
 
 void print_enemies(){
     for(int i = 0; i < game.enemy_count; ++i)
-        if(game.enemies[i].alive)
+        if(game.enemies[i].alive && in_bounds(game.enemies[i].coords.x, game.enemies[i].coords.y))
             print_at(game.enemies[i].coords.x, game.enemies[i].coords.y, "0");
 
 }
@@ -282,7 +294,7 @@ void print_stats(){
 
 void print_potions(){
     for(int i = 0; i < game.heal_potions_count; ++i){
-        if(game.heal_potions[i].used == 0)
+        if(game.heal_potions[i].used == 0 && in_bounds(game.heal_potions[i].coords.x, game.heal_potions[i].coords.y))
             print_at(game.heal_potions[i].coords.x, game.heal_potions[i].coords.y, "*");
     }
 }
@@ -883,6 +895,68 @@ void move_bullets(){
 
 //--------------------------------------------------------------------
 
+void move_elements_up(){
+    int offset = window_height / 2;
+
+    game.shooter.coords.y += offset;
+
+    for(int i = 0; i < game.enemy_count; ++i)
+        game.enemies[i].coords.y += offset;
+
+    for(int i = 0; i < game.heal_potions_count; ++i)
+        game.heal_potions[i].coords.y += offset;
+}
+
+void move_elements_down(){
+    int offset = window_height / 2;
+
+    game.shooter.coords.y -= offset;
+
+    for(int i = 0; i < game.enemy_count; ++i)
+        game.enemies[i].coords.y -= offset;
+
+    for(int i = 0; i < game.heal_potions_count; ++i)
+        game.heal_potions[i].coords.y -= offset;
+}
+
+void move_elements_left(){
+    int offset = window_width / 2;
+
+    game.shooter.coords.x += offset;
+
+    for(int i = 0; i < game.enemy_count; ++i)
+        game.enemies[i].coords.x += offset;
+
+    for(int i = 0; i < game.heal_potions_count; ++i)
+        game.heal_potions[i].coords.x += offset;
+}
+
+void move_elements_right(){
+    int offset = window_width / 2;
+
+    game.shooter.coords.x -= offset;
+
+    for(int i = 0; i < game.enemy_count; ++i)
+        game.enemies[i].coords.x -= offset;
+
+    for(int i = 0; i < game.heal_potions_count; ++i)
+        game.heal_potions[i].coords.x -= offset;
+}
+
+void check_out_of_bounds(){
+    if(game.shooter.coords.y <= 0)
+        move_elements_up();
+    else if(game.shooter.coords.y > window_height)
+        move_elements_down();
+    else if(game.shooter.coords.x <= 0)
+        move_elements_left();
+    else if(game.shooter.coords.x > window_width)
+        move_elements_right();
+}
+
+//--------------------------------------------------------------------
+
+
 void check_shooter(){
     if(game.shooter.health <= 0){
         game.is_running = 0;
@@ -891,6 +965,8 @@ void check_shooter(){
     }
 
     check_potion_collision();
+
+    check_out_of_bounds();
 }
 
 //--------------------------------------------------------------------
