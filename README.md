@@ -13,6 +13,3 @@ https://github.com/user-attachments/assets/b491b563-cedc-49a0-a7dd-1ac8f8667a4e
 * Weapon variety: Unlock new weapons every two stages. (4 as of now)
 * Survival mechanics: Collect health potions to stay alive.
 * Immersive terminal experience: Experience the thrill of 2D shooting in a classic terminal environment.
-
-
-Are you ready to take on the challenge? Download Termix today and prove your skills as a terminal-based shooter hero! 🕹️💥
