@@ -1,8 +1,16 @@
+# *Termix*: A Terminal-Based 2D Shooter
 
-# *Termix* - 2D shooter game
+Embark on a thrilling journey through an endless, ever-evolving universe in Termix. This intense 2D shooter, crafted in C for the Linux Terminal, will push your reflexes to the limit.
 
-There are currently 4 stages and two weapons. Every stage, the enemies get tuffer and spawn faster. Every two stages, you get another weapon. Killed enemies drop heal potions that you can use, and
-the map is infinite.
+Face waves of increasingly formidable foes across four challenging stages, each with its own unique dangers. As you progress, unlock a diverse arsenal of weapons, each with its own distinct playstyle. Stay alive by collecting health potions dropped by fallen enemies, and explore the infinite expanse of the game world.
 
-This was all made in *The C Programming Language*, and it was made for the Linux Terminal (it might not work on other operating systems).
+### Key Features:
 
+* Infinite map: The screen of the terminal moves as you try to exit it.
+* Increasing difficulty: Face tougher enemies and faster spawn rates as you advance.
+* Weapon variety: Unlock new weapons every two stages. (4 as of now)
+* Survival mechanics: Collect health potions to stay alive.
+* Immersive terminal experience: Experience the thrill of 2D shooting in a classic terminal environment.
+
+
+Are you ready to take on the challenge? Download Termix today and prove your skills as a terminal-based shooter hero! 🕹️💥
