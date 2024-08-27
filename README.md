@@ -4,6 +4,8 @@ Embark on a thrilling journey through an endless, ever-evolving universe in Term
 
 Face waves of increasingly formidable foes across four challenging stages, each with its own unique dangers. As you progress, unlock a diverse arsenal of weapons, each with its own distinct playstyle. Stay alive by collecting health potions dropped by fallen enemies, and explore the infinite expanse of the game world.
 
+https://github.com/user-attachments/assets/b491b563-cedc-49a0-a7dd-1ac8f8667a4e
+
 ### Key Features:
 
 * Infinite map: The screen of the terminal moves as you try to exit it.
