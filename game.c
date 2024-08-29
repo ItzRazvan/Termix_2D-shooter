@@ -18,7 +18,7 @@ void update_best_score();
 #define MAX_POTIONS_COUNT 15
 
 #define Y_AXES_MOVEMENT_COOLDOWN 6
-#define Y_AXES_BULLETS_COOLDOWN 3
+#define Y_AXES_BULLETS_COOLDOWN 2
 
 #define Y_AXES 10
 #define X_AXES 11
@@ -985,7 +985,7 @@ void handle_key(char* key){
         return;
     }
 
-    if(*key == 'k'){
+    if(*key == 'k' || *key == 'K'){
         shoot();
         return;
     }
@@ -994,6 +994,7 @@ void handle_key(char* key){
         game.shooter.movement_cooldown = 0;
         switch (*key){
                 case 'w':
+                case 'W':
                     if(game.shooter.y_axes_count >= Y_AXES_MOVEMENT_COOLDOWN){
                         game.shooter.coords.y--;
                         game.shooter.shooting_dir = UP;
@@ -1001,10 +1002,12 @@ void handle_key(char* key){
                     }
                     break;
                 case 'a':
+                case 'A':
                     game.shooter.coords.x--;
                     game.shooter.shooting_dir = LEFT;
                     break;
                 case 's':
+                case 'S':
                     if(game.shooter.y_axes_count >= Y_AXES_MOVEMENT_COOLDOWN){
                         game.shooter.coords.y++;
                         game.shooter.shooting_dir = DOWN;
@@ -1012,6 +1015,7 @@ void handle_key(char* key){
                     }
                     break;
                 case 'd':
+                case 'D':
                     game.shooter.coords.x++;
                     game.shooter.shooting_dir = RIGHT;
                     break;
@@ -1179,15 +1183,19 @@ void update_best_score(){
 void start_screen(){
     restore_terminal_colour();
     clear_terminal();
-    print_at(window_width/8, window_height/3-3, "Press 's' to start the game");
-    print_at(window_width/8, window_height/3-1, "Press 'q' to quit  the game");
-    print_at_with_int(window_width/8 + 2, window_height/3+2, "Your best score is: ", get_best_score());
+    print_at(window_width/8, window_height/3-3, "Press any key to start the game");
+    print_at(window_width/8 + 2, window_height/3-1, "Press 'q' to quit the game");
+    print_at_with_int(window_width/8 + 3, window_height/3+2, "Your best score is: ", get_best_score());
+
+    print_at(5, window_height - 3, "Shoot on 'k'");
+    print_at(5, window_height - 2, "Movement on 'w', 'a', 's', 'd'");
+    print_at(5, window_height - 1, "Leave game on 'esc'");
 
     char key = getchar();
         
-    if(key == 'q'){
+    if(key == 'q' || key == 'Q'){
         exit_game();
-    }else if(key == 's'){
+    }else{
         start_game();
     }
     
