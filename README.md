@@ -13,3 +13,7 @@ https://github.com/user-attachments/assets/b491b563-cedc-49a0-a7dd-1ac8f8667a4e
 * Weapon variety: Unlock new weapons every two stages. (4 as of now)
 * Survival mechanics: Collect health potions to stay alive.
 * Immersive terminal experience: Experience the thrill of 2D shooting in a classic terminal environment.
+
+## How to install?
+THE GAME WORKS ONLY FROM LINUX
+Go to the releases, install and unzip the file, cd to it in the terminal then run ./Termix.exe
